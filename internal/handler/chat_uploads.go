@@ -93,22 +93,27 @@ func (h *ChatUploadsHandler) List(c *gin.Context) {
 		return
 	}
 	var files []ChatUploadFileItem
+	var folders []string
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
 		if d.IsDir() {
+			folders = append(folders, relSlash)
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		relSlash := filepath.ToSlash(rel)
 		parts := strings.Split(relSlash, "/")
 		var dateStr, convID string
 		if len(parts) >= 2 {
@@ -142,10 +147,31 @@ func (h *ChatUploadsHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if conversationFilter != "" {
+		filteredFolders := make([]string, 0, len(folders))
+		for _, rel := range folders {
+			parts := strings.Split(rel, "/")
+			if len(parts) >= 2 && parts[1] == conversationFilter {
+				filteredFolders = append(filteredFolders, rel)
+				continue
+			}
+			if len(parts) == 1 {
+				prefix := rel + "/"
+				for _, f := range files {
+					if strings.HasPrefix(f.RelativePath, prefix) {
+						filteredFolders = append(filteredFolders, rel)
+						break
+					}
+				}
+			}
+		}
+		folders = filteredFolders
+	}
+	sort.Strings(folders)
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].ModifiedUnix > files[j].ModifiedUnix
 	})
-	c.JSON(http.StatusOK, gin.H{"files": files})
+	c.JSON(http.StatusOK, gin.H{"files": files, "folders": folders})
 }
 
 // Download GET /api/chat-uploads/download?path=...
