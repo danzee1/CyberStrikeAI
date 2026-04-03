@@ -2452,6 +2452,7 @@ async function loadConversation(conversationId) {
                 const messageEl = document.getElementById(messageId);
                 if (messageEl && msg && msg.id) {
                     messageEl.dataset.backendMessageId = String(msg.id);
+                    attachDeleteTurnButton(messageEl);
                 }
                 // 对于助手消息，总是渲染过程详情（即使没有processDetails也要显示展开详情按钮）
                 if (msg.role === 'assistant') {
@@ -2488,6 +2489,67 @@ async function loadConversation(conversationId) {
     } catch (error) {
         console.error('加载对话失败:', error);
         alert('加载对话失败: ' + error.message);
+    }
+}
+
+/** 「删除本轮」：与时间戳同一行（message-meta-footer），风格与复制按钮区区分 */
+function attachDeleteTurnButton(messageEl) {
+    if (!messageEl || !messageEl.dataset.backendMessageId) return;
+    if (messageEl.querySelector('.message-delete-turn-btn')) return;
+    const content = messageEl.querySelector('.message-content');
+    if (!content) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'message-delete-turn-btn';
+    const title = typeof window.t === 'function' ? window.t('chat.deleteTurnTitle') : '删除本轮对话';
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    btn.onclick = function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        deleteConversationTurnFromUI(messageEl.dataset.backendMessageId);
+    };
+    const timeDiv = content.querySelector('.message-time');
+    let footer = content.querySelector('.message-meta-footer');
+    if (!footer && timeDiv && timeDiv.parentNode === content) {
+        footer = document.createElement('div');
+        footer.className = 'message-meta-footer';
+        timeDiv.parentNode.insertBefore(footer, timeDiv);
+        footer.appendChild(timeDiv);
+    }
+    if (footer) {
+        footer.appendChild(btn);
+    } else {
+        content.appendChild(btn);
+    }
+}
+
+/** 删除锚点所在整轮（后端：该轮 user 至下一轮 user 之前），并清空 ReAct 快照 */
+async function deleteConversationTurnFromUI(anchorBackendMessageId) {
+    if (!currentConversationId || !anchorBackendMessageId) return;
+    const confirmMsg = typeof window.t === 'function' ? window.t('chat.deleteTurnConfirm') : '确定删除本轮对话？';
+    if (!confirm(confirmMsg)) return;
+    try {
+        const response = await apiFetch(`/api/conversations/${currentConversationId}/delete-turn`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messageId: anchorBackendMessageId })
+        });
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (e) { /* ignore */ }
+        if (!response.ok) {
+            throw new Error(data.error || data.message || 'delete failed');
+        }
+        await loadConversation(currentConversationId);
+        if (typeof loadConversations === 'function') loadConversations();
+        if (typeof loadConversationsWithGroups === 'function') loadConversationsWithGroups();
+    } catch (error) {
+        console.error('delete turn failed:', error);
+        const failed = typeof window.t === 'function' ? window.t('chat.deleteTurnFailed') : '删除本轮失败';
+        alert(failed + ': ' + (error && error.message ? error.message : error));
     }
 }
 

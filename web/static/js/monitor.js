@@ -700,10 +700,45 @@ function convertProgressToDetails(progressId, assistantMessageId) {
     scrollChatMessagesToBottomIfPinned(insertWasPinned);
 }
 
+/** 将后端消息 UUID 绑定到助手气泡，供删除本轮 / 过程详情懒加载（domId 为前端 msg-*） */
+function applyBackendMessageIdToAssistantDom(domAssistantId, backendMessageId) {
+    if (!domAssistantId || !backendMessageId) return;
+    const el = document.getElementById(domAssistantId);
+    if (!el) return;
+    el.dataset.backendMessageId = String(backendMessageId);
+    if (typeof attachDeleteTurnButton === 'function') {
+        attachDeleteTurnButton(el);
+    }
+}
+
+/** 将后端用户消息 ID 绑定到最后一条尚未绑定 backendMessageId 的用户气泡 */
+function applyBackendMessageIdToLastUser(backendMessageId) {
+    if (!backendMessageId) return;
+    const users = document.querySelectorAll('#chat-messages .message.user');
+    if (!users.length) return;
+    const lastUser = users[users.length - 1];
+    if (lastUser.dataset.backendMessageId) return;
+    lastUser.dataset.backendMessageId = String(backendMessageId);
+    if (typeof attachDeleteTurnButton === 'function') {
+        attachDeleteTurnButton(lastUser);
+    }
+}
+
 // 处理流式事件
 function handleStreamEvent(event, progressElement, progressId, 
                           getAssistantId, setAssistantId, getMcpIds, setMcpIds) {
     const streamScrollWasPinned = isChatMessagesPinnedToBottom();
+
+    // 不依赖进度时间线；在首条 SSE 即可绑定用户消息 ID
+    if (event.type === 'message_saved') {
+        const d = event.data || {};
+        if (d.userMessageId) {
+            applyBackendMessageIdToLastUser(d.userMessageId);
+        }
+        scrollChatMessagesToBottomIfPinned(streamScrollWasPinned);
+        return;
+    }
+
     const timeline = document.getElementById(progressId + '-timeline');
     if (!timeline) return;
 
@@ -1173,6 +1208,9 @@ function handleStreamEvent(event, progressElement, progressId,
             {
                 const preferredMessageId = event.data && event.data.messageId ? event.data.messageId : null;
                 const { assistantId, assistantElement } = upsertTerminalAssistantMessage(event.message, preferredMessageId);
+                if (assistantId && preferredMessageId) {
+                    applyBackendMessageIdToAssistantDom(assistantId, preferredMessageId);
+                }
                 if (assistantElement) {
                     const detailsId = 'process-details-' + assistantId;
                     if (!document.getElementById(detailsId)) {
@@ -1306,6 +1344,11 @@ function handleStreamEvent(event, progressElement, progressId,
             integrateProgressToMCPSection(progressId, assistantIdFinal, mcpIds);
             responseStreamStateByProgressId.delete(progressId);
 
+            const respMid = responseData.messageId;
+            if (respMid) {
+                applyBackendMessageIdToAssistantDom(assistantIdFinal, respMid);
+            }
+
             setTimeout(() => {
                 collapseAllProgressDetails(assistantIdFinal, progressId);
             }, 3000);
@@ -1344,6 +1387,9 @@ function handleStreamEvent(event, progressElement, progressId,
             {
                 const preferredMessageId = event.data && event.data.messageId ? event.data.messageId : null;
                 const { assistantId, assistantElement } = upsertTerminalAssistantMessage(event.message, preferredMessageId);
+                if (assistantId && preferredMessageId) {
+                    applyBackendMessageIdToAssistantDom(assistantId, preferredMessageId);
+                }
                 if (assistantElement) {
                     const detailsId = 'process-details-' + assistantId;
                     if (!document.getElementById(detailsId)) {

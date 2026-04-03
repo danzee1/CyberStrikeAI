@@ -1573,6 +1573,67 @@ header {
     letter-spacing: 0.01em;
 }
 
+/* 时间戳 + 删除本轮（与气泡分离，和「展开详情」同一视觉层级） */
+.message-meta-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    width: 100%;
+    min-height: 22px;
+}
+
+.message.user .message-meta-footer {
+    justify-content: flex-end;
+}
+
+.message.assistant .message-meta-footer {
+    justify-content: flex-start;
+}
+
+.message-delete-turn-btn {
+    position: static;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    opacity: 0.5;
+    flex-shrink: 0;
+    transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.message:hover .message-meta-footer .message-delete-turn-btn {
+    opacity: 0.85;
+}
+
+.message-delete-turn-btn:hover {
+    color: #c62828;
+    background: rgba(198, 40, 40, 0.07);
+    border-color: rgba(198, 40, 40, 0.15);
+    opacity: 1;
+}
+
+.message-delete-turn-btn:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--accent-color, #0066ff);
+    outline-offset: 1px;
+}
+
+@media (hover: none) {
+    .message-delete-turn-btn {
+        opacity: 0.65;
+    }
+}
+
 /* 用户消息中的表格样式 */
 .message.user .message-bubble .table-wrapper {
     scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
