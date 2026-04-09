@@ -990,6 +990,24 @@ func (h *AgentHandler) createProgressCallback(conversationID, assistantMessageID
 			return
 		}
 
+		// 当 Agent 同时发送 thinking_stream_* 和 thinking（带同一 streamId）时，
+		// thinking_stream_* 已经会在 flushThinkingStreams() 聚合落库；
+		// 这里跳过同 streamId 的 thinking，避免 processDetails 双份展示。
+		if eventType == "thinking" {
+			if dataMap, ok := data.(map[string]interface{}); ok {
+				if sid, ok2 := dataMap["streamId"].(string); ok2 && sid != "" {
+					if tb, exists := thinkingStreams[sid]; exists && tb != nil {
+						if strings.TrimSpace(tb.b.String()) != "" {
+							return
+						}
+					}
+					if flushedThinking[sid] {
+						return
+					}
+				}
+			}
+		}
+
 		// 保存过程详情到数据库（排除 response/done；response 正文已在 messages 表）
 		// response_start/response_delta 已聚合为 planning，不落逐条。
 		if assistantMessageID != "" &&
